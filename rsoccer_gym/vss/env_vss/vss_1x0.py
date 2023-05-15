@@ -79,7 +79,7 @@ class VSS1x0(VSSBaseEnv):
                                            shape=(2, ), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=-self.NORM_BOUNDS,
                                                 high=self.NORM_BOUNDS,
-                                                shape=(11, ), dtype=np.float32)
+                                                shape=(9, ), dtype=np.float32)
 
         # Initialize Class Atributes
         self.previous_ball_potential = None
@@ -125,8 +125,9 @@ class VSS1x0(VSSBaseEnv):
 
         angle, (v1_x, v1_y) = transform((vetor_x_gol_oponente, vetor_y_gol_oponente), ang)
 
-        observation.append(v1_x) # vetor robo -> gol oponente
-        observation.append(v1_y) # vetor robo -> gol oponente
+        distance_rg = np.sqrt(v1_x * v1_x + v1_y * v1_y)
+        observation.append(distance_rg) # vetor robo -> gol oponente
+
         observation.append(angle/math.pi) # vetor robo -> gol oponente
 
         vetor_x_bola = (self.frame.ball.x - self.frame.robots_blue[0].x) / max_comprimento
@@ -134,11 +135,11 @@ class VSS1x0(VSSBaseEnv):
 
 
         angle, (v1_x, v1_y) = transform((vetor_x_bola, vetor_y_bola), ang)
-
+        distance_rb = np.sqrt(v1_x * v1_x + v1_y * v1_y)
+        # print("Distance rb: ", distance_rb)
         # print(f'{vetor_x_bola}\t{vetor_y_bola}\t{v1_x}\t{v1_y}\t{angle}')
         
-        observation.append(v1_x) # vetor robo -> bola
-        observation.append(v1_y) # vetor robo -> bola
+        observation.append(distance_rb)
         observation.append(angle/math.pi) # vetor robo -> bola
 
         # observation.append(1-vetor_x_gol_oponente) # vetor robo -> nosso gol
