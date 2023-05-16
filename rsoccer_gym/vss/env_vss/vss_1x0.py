@@ -73,7 +73,7 @@ class VSS1x0(VSSBaseEnv):
 
     def __init__(self):
         super().__init__(field_type=0, n_robots_blue=1, n_robots_yellow=0,
-                         time_step=0.07)
+                         time_step=0.1)
 
         self.action_space = gym.spaces.Box(low=-1, high=1,
                                            shape=(2, ), dtype=np.float32)
@@ -135,15 +135,11 @@ class VSS1x0(VSSBaseEnv):
 
 
         angle, (v1_x, v1_y) = transform((vetor_x_bola, vetor_y_bola), ang)
-        distance_rb = np.sqrt(v1_x * v1_x + v1_y * v1_y)
-        # print("Distance rb: ", distance_rb)
-        # print(f'{vetor_x_bola}\t{vetor_y_bola}\t{v1_x}\t{v1_y}\t{angle}')
+        distance_rb = np.sqrt(v1_x * v1_x + v1_y * v1_y) # vetor robo -> bola
         
         observation.append(distance_rb)
         observation.append(angle/math.pi) # vetor robo -> bola
 
-        # observation.append(1-vetor_x_gol_oponente) # vetor robo -> nosso gol
-        # observation.append(vetor_y_gol_oponente) # vetor robo -> nosso gol
 
         observation.append(np.cos(ang))
 
@@ -153,24 +149,6 @@ class VSS1x0(VSSBaseEnv):
 
         observation.append(self.norm_v(self.frame.robots_blue[0].v_x))
         observation.append(self.norm_v(self.frame.robots_blue[0].v_y))
-
-        # for i in range(self.n_robots_blue):
-        #     observation.append(self.
-
-        #         np.cos(np.deg2rad(self.frame.robots_blue[i].theta))
-        #     )
-        #     observation.append(self.norm_v(self.frame.robots_blue[i].v_x))
-        #     observation.append(self.norm_v(self.frame.robots_blue[i].v_y))
-        #     observation.append(self.norm_w(self.frame.robots_blue[i].v_theta))
-
-        # for i in range(self.n_robots_yellow):
-        #     observation.append(self.norm_pos(self.frame.robots_yellow[i].x))
-        #     observation.append(self.norm_pos(self.frame.robots_yellow[i].y))
-        #     observation.append(self.norm_v(self.frame.robots_yellow[i].v_x))
-        #     observation.append(self.norm_v(self.frame.robots_yellow[i].v_y))
-        #     observation.append(
-        #         self.norm_w(self.frame.robots_yellow[i].v_theta)
-        #     )
 
         return np.array(observation, dtype=np.float32)
 
@@ -203,7 +181,7 @@ class VSS1x0(VSSBaseEnv):
         goal = False
         w_move = 0.5
         w_ball_grad = 1
-        w_energy = 2e-2
+        w_energy = 4e-2
         if self.reward_shaping_total is None:
             self.reward_shaping_total = {'goal_score': 0, 'move': 0,
                                          'ball_grad': 0, 'energy': 0,
