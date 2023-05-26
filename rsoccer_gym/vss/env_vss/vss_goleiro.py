@@ -71,14 +71,16 @@ class VSS_STxGK(VSSBaseEnv):
     """
 
     def __init__(self):
-        super().__init__(field_type=0, n_robots_blue=1, n_robots_yellow=1,
+        super().__init__(field_type=0, n_robots_blue=1, n_robots_yellow=2,
                          time_step=0.075)
 
         self.action_space = gym.spaces.Box(low=-1, high=1,
                                            shape=(2, ), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=-self.NORM_BOUNDS,
                                                 high=self.NORM_BOUNDS,
-                                                shape=(9, ), dtype=np.float32)
+                                                shape=(11, ), dtype=np.float32)
+
+        goleiro_teve_bola = False
 
         # Initialize Class Atributes
         self.previous_ball_potential = None
@@ -95,12 +97,13 @@ class VSS_STxGK(VSSBaseEnv):
         print('Environment initialized')
 
     def reset(self):
+        
         self.actions = None
         self.reward_shaping_total = None
         self.previous_ball_potential = None
         for ou in self.ou_actions:
             ou.reset()
-
+        self.goleiro_teve_bola = False
         return super().reset()
 
     def step(self, action):
@@ -178,13 +181,13 @@ class VSS_STxGK(VSSBaseEnv):
         angle, (v1_x, v1_y) = transform((vetor_x_gol_oponente, vetor_y_gol_oponente), ang)
 
         distance_rg = np.sqrt(v1_x * v1_x + v1_y * v1_y)
-        observation.append(distance_rg) # vetor robo -> gol oponente
 
+        observation.append(distance_rg) # vetor robo -> gol oponente
         observation.append(angle/math.pi) # vetor robo -> gol oponente
 
+        # observacao para bola
         vetor_x_bola = (self.frame.ball.x - self.frame.robots_yellow[0].x) / max_comprimento
         vetor_y_bola = (self.frame.ball.y - self.frame.robots_yellow[0].y) / max_altura
-
 
         angle, (v1_x, v1_y) = transform((vetor_x_bola, vetor_y_bola), ang)
         distance_rb = np.sqrt(v1_x * v1_x + v1_y * v1_y) # vetor robo -> bola
@@ -193,14 +196,26 @@ class VSS_STxGK(VSSBaseEnv):
         observation.append(angle/math.pi) # vetor robo -> bola
 
 
-        observation.append(np.cos(ang))
+        # observação do amigo para o goleiro
+        amigo_x = (self.frame.robots_yellow[1].x - self.frame.robots_yellow[0].x) / max_comprimento
+        amigo_y = (self.frame.robots_yellow[1].y - self.frame.robots_yellow[0].y) / max_altura
 
+        angle, (v1_x, v1_y) = transform((amigo_x, amigo_y), ang)
+        distance_amigo = np.sqrt(v1_x * v1_x + v1_y * v1_y)
+        
+        observation.append(distance_amigo)
+        observation.append(angle/math.pi)
+
+
+        observation.append(np.cos(ang))
 
         observation.append(self.norm_v(self.frame.ball.v_x))
         observation.append(self.norm_v(self.frame.ball.v_y))
 
         observation.append(self.norm_v(self.frame.robots_yellow[0].v_x))
         observation.append(self.norm_v(self.frame.robots_yellow[0].v_y))
+
+
 
         return np.array(observation, dtype=np.float32)
 
@@ -259,11 +274,16 @@ class VSS_STxGK(VSSBaseEnv):
                 goal_area_x = .7
                 goal_area_y = 0
 
+                dist_ball_from_goleiro = np.sqrt((goal_area_x - self.frame.robots_yellow[0].x)**2 + (goal_area_y - self.frame.robots_yellow[0].y)**2)
+
+                if dist_ball_from_goleiro <= .1 and not self.goleiro_teve_bola:
+                    self.goleiro_teve_bola = True
+                    reward += 50
 
                 dist_ball_from_area = np.sqrt((goal_area_x - self.frame.ball.x)**2 + (goal_area_y - self.frame.ball.y)**2)
 
                 if dist_ball_from_area < .3:
-                    print("ball too close")
+                    # print("ball too close")
                     reward -= 5
                     self.reward_shaping_total['goal_proximity_penalty'] -= 5
                 else:
@@ -273,18 +293,19 @@ class VSS_STxGK(VSSBaseEnv):
                 dist = np.sqrt((goal_area_x - self.frame.robots_yellow[0].x)**2 + (goal_area_y - self.frame.robots_yellow[0].y)**2)
                 
                 if dist > .45:
-                    print("goleiro longe", self.steps)
+                    # print("goleiro longe", self.steps)
                     reward -= 5
                     self.reward_shaping_total['goal_proximity_penalty'] -= 5
                 else:
                     reward += 1
                     self.reward_shaping_total['goal_proximity_bonus'] += 1
 
-                # dist_ball = np.sqrt((self.frame.ball.x - self.frame.robots_yellow[0].x)**2 + (self.frame.ball.y - self.frame.robots_yellow[0].y)**2)
-                # if dist_ball < .1:
-                #     reward += 50
-                #     self.reward_shaping_total['goal_kick'] += 50
+                dist_ball = np.sqrt((self.frame.ball.x - self.frame.robots_yellow[1].x)**2 + (self.frame.ball.y - self.frame.robots_yellow[1].y)**2)
+                if dist_ball <= .19 and self.goleiro_teve_bola:
+                    reward += 500
+                    self.reward_shaping_total['passe_feito'] = 500
 
+                    return reward, True
 
         return reward, goal
 
@@ -303,12 +324,14 @@ class VSS_STxGK(VSSBaseEnv):
 
         pos_frame: Frame = Frame()
 
+
         pos_frame.ball = Ball(x=x(), y=y())
 
         while pos_frame.ball.x > -.25:
             pos_frame.ball = Ball(x=x(), y=y())
 
-        min_dist = 0.1
+
+        min_dist = 0.2
 
         places = KDTree()
         places.insert((pos_frame.ball.x, pos_frame.ball.y))
@@ -331,13 +354,14 @@ class VSS_STxGK(VSSBaseEnv):
         pos_frame.robots_yellow[0] = Robot(x=pos[0], y=pos[1], theta=theta())
 
 
-        for i in range(1,self.n_robots_yellow):
-            pos = (x(), y())
+        for i in range(1, self.n_robots_yellow):
+            pos = (-.5-x()/5, y())
             while places.get_nearest(pos)[1] < min_dist:
-                pos = (x(), y())
+                pos = (-.5-x()/5, y())
 
             places.insert(pos)
             pos_frame.robots_yellow[i] = Robot(x=pos[0], y=pos[1], theta=theta())
+
 
         return pos_frame
 
