@@ -80,7 +80,7 @@ class VSS_STxGK(VSSBaseEnv):
                                                 high=self.NORM_BOUNDS,
                                                 shape=(11, ), dtype=np.float32)
 
-        goleiro_teve_bola = False
+        self.goleiro_teve_bola = False
 
         # Initialize Class Atributes
         self.previous_ball_potential = None
@@ -274,11 +274,17 @@ class VSS_STxGK(VSSBaseEnv):
                 goal_area_x = .7
                 goal_area_y = 0
 
-                dist_ball_from_goleiro = np.sqrt((goal_area_x - self.frame.robots_yellow[0].x)**2 + (goal_area_y - self.frame.robots_yellow[0].y)**2)
+                dist_ball_from_goleiro = np.sqrt((self.frame.ball.x - self.frame.robots_yellow[0].x)**2 + (self.frame.ball.y - self.frame.robots_yellow[0].y)**2)
+
+                dist_ball_from_atacante = np.sqrt((self.frame.ball.x - self.frame.robots_blue[0].x)**2 + (self.frame.ball.y - self.frame.robots_blue[0].y)**2)
 
                 if dist_ball_from_goleiro <= .1 and not self.goleiro_teve_bola:
+                    # print('goleiro touch')
                     self.goleiro_teve_bola = True
-                    reward += 50
+
+                elif dist_ball_from_atacante <= .1 and self.goleiro_teve_bola:
+                    # print('atacante touch')
+                    self.goleiro_teve_bola = False
 
                 dist_ball_from_area = np.sqrt((goal_area_x - self.frame.ball.x)**2 + (goal_area_y - self.frame.ball.y)**2)
 
@@ -302,8 +308,10 @@ class VSS_STxGK(VSSBaseEnv):
 
                 dist_ball = np.sqrt((self.frame.ball.x - self.frame.robots_yellow[1].x)**2 + (self.frame.ball.y - self.frame.robots_yellow[1].y)**2)
                 if dist_ball <= .19 and self.goleiro_teve_bola:
-                    reward += 500
-                    self.reward_shaping_total['passe_feito'] = 500
+                    # recompensa é mais alta se ele cumprir esse objetivo
+                    rw = 1000 * (700 - self.steps)/700
+                    reward += rw
+                    self.reward_shaping_total['passe_feito'] = rw
 
                     return reward, True
 
