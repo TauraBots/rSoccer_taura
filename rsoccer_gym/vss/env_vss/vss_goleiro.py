@@ -246,12 +246,13 @@ class VSS_STxGK(VSSBaseEnv):
         goal = False
         w_move = 1
         w_ball_grad = 1
-        w_energy = 2e-5
+        w_energy = 2e-3
         if self.reward_shaping_total is None:
             self.reward_shaping_total = {'goal_score': 0,
                                          "goal_proximity_bonus": 0,
                                          "goal_proximity_penalty": 0,
-                                         "goal_kick": 0}
+                                         "goal_kick": 0,
+                                         'energy':0}
 
         # Check if goal ocurred
         if self.frame.ball.x > (self.field.length / 2):
@@ -267,7 +268,9 @@ class VSS_STxGK(VSSBaseEnv):
         else:
 
             if self.last_frame is not None:
-                # energy_penalty = self.__energy_penalty()
+
+                reward += w_energy * self.__energy_penalty()
+                self.reward_shaping_total['energy'] += w_energy * self.__energy_penalty()
 
                 reward += w_move * self.__move_reward()
 
@@ -290,15 +293,15 @@ class VSS_STxGK(VSSBaseEnv):
 
                 if dist_ball_from_area < .3:
                     # print("ball too close")
-                    reward -= 5
-                    self.reward_shaping_total['goal_proximity_penalty'] -= 5
+                    reward -= 5/2
+                    self.reward_shaping_total['goal_proximity_penalty'] -= 5/2
                 else:
                     reward += 1
                     self.reward_shaping_total['goal_proximity_penalty'] += 1
 
                 dist = np.sqrt((goal_area_x - self.frame.robots_yellow[0].x)**2 + (goal_area_y - self.frame.robots_yellow[0].y)**2)
                 
-                if dist > .45:
+                if dist > .4:
                     # print("goleiro longe", self.steps)
                     reward -= 5
                     self.reward_shaping_total['goal_proximity_penalty'] -= 5
@@ -307,7 +310,7 @@ class VSS_STxGK(VSSBaseEnv):
                     self.reward_shaping_total['goal_proximity_bonus'] += 1
 
                 dist_ball = np.sqrt((self.frame.ball.x - self.frame.robots_yellow[1].x)**2 + (self.frame.ball.y - self.frame.robots_yellow[1].y)**2)
-                if dist_ball <= .19 and self.goleiro_teve_bola:
+                if dist_ball <= .25 and self.goleiro_teve_bola:
                     # recompensa é mais alta se ele cumprir esse objetivo
                     rw = 1000 * (700 - self.steps)/700
                     reward += rw
@@ -363,9 +366,9 @@ class VSS_STxGK(VSSBaseEnv):
 
 
         for i in range(1, self.n_robots_yellow):
-            pos = (-.5-x()/5, y())
+            pos = (-.4-x()/3, y())
             while places.get_nearest(pos)[1] < min_dist:
-                pos = (-.5-x()/5, y())
+                pos = (-.4-x()/3, y())
 
             places.insert(pos)
             pos_frame.robots_yellow[i] = Robot(x=pos[0], y=pos[1], theta=theta())
