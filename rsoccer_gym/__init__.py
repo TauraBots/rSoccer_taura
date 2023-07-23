@@ -2,7 +2,7 @@ from gym.envs.registration import register
 
 register(id='VSS-v11',
          entry_point='rSoccer_taura.rsoccer_gym.vss.env_vss:VSS_STxGK',
-         max_episode_steps=350
+         max_episode_steps=250
          )
 
 register(id='VSS-v13',

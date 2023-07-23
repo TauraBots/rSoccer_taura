@@ -72,7 +72,7 @@ class VSS_STxGK(VSSBaseEnv):
 
     def __init__(self):
         super().__init__(field_type=0, n_robots_blue=1, n_robots_yellow=2,
-                         time_step=0.075)
+                         time_step=0.025)
 
         self.action_space = gym.spaces.Box(low=-1, high=1,
                                            shape=(2, ), dtype=np.float32)
@@ -246,7 +246,7 @@ class VSS_STxGK(VSSBaseEnv):
         goal = False
         w_move = 1
         w_ball_grad = 1
-        w_energy = 2e-3
+        w_energy = 2e-2
         if self.reward_shaping_total is None:
             self.reward_shaping_total = {'goal_score': 0,
                                          "goal_proximity_bonus": 0,
@@ -291,10 +291,10 @@ class VSS_STxGK(VSSBaseEnv):
 
                 dist_ball_from_area = np.sqrt((goal_area_x - self.frame.ball.x)**2 + (goal_area_y - self.frame.ball.y)**2)
 
-                if dist_ball_from_area < .3:
+                if dist_ball_from_area < .25:
                     # print("ball too close")
-                    reward -= 5/2
-                    self.reward_shaping_total['goal_proximity_penalty'] -= 5/2
+                    reward -= 1
+                    self.reward_shaping_total['goal_proximity_penalty'] -= 1
                 else:
                     reward += 1
                     self.reward_shaping_total['goal_proximity_penalty'] += 1
