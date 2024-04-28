@@ -151,6 +151,8 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
         self.t1 = time.time( )
         self.next_point()
 
+
+
         return super().reset()
     
 
@@ -174,6 +176,7 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
     def observations_atacante(self):
         return observations(self)
 
+
     def _get_goalkeeper_vels( self ) -> list:
         # Pegar a posição do Goleiro 
         gk: Robot = self.frame.robots_yellow[0]     # Obter o goleiro
@@ -185,36 +188,63 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
         # Pegar a posição da bola  
         ball: Ball = self.frame.ball                # Obter a bola
         ball_pos: list = [ ball.x, ball.y ]         # Obter a posição da bola
+        ball_pos: list = [ ball.x, np.sin( time.time() ) ]         # Obter a posição da bola
 
-        # Cria um target para ir até lá
+
+        # Cria um target fico para ir até lá
         # ball_pos: list = [ 0.6, 0.50 ]        
-        if time.time() - self.t1 > 2:
-            ball_pos = self.target  
-            if np.sqrt((gk_pos[0] - ball_pos[0]) ** 2 + (gk_pos[1] - ball_pos[1]) ** 2) < 0.05:
-                self.next_point()
         
+        # Cria targets que spanw aleatoriamente no campo 
+        # if time.time() - self.t1 > 2:
+        #     ball_pos = self.target  
+        #     if np.sqrt((gk_pos[0] - ball_pos[0]) ** 2 + (gk_pos[1] - ball_pos[1]) ** 2) < 0.05:
+        #         self.next_point()
+
+        # Cria um target proporcional ao eixo Y da bola 
+        sin_t = np.sin( time.time() )*0.5
+        ball_pos[0] = 0.65
+        if abs(sin_t) > 0.4:
+            ball_pos[1] = 0.4 if sin_t > 0 else -0.4
+        else:
+            ball_pos[1] = sin_t
+
+        # self.frame.ball.y = np.sin( time.time() )
+
+
         # Pegar a distancia entre o goleiro e a bola  
         robot2ball_diff: list = [ ball_pos[0] - gk_pos[0], ball_pos[1] - gk_pos[1] ]            # return [ dx, dy ]
         robot2ball_mag: float = np.sqrt((robot2ball_diff[0]) ** 2 + (robot2ball_diff[1]) ** 2)  # return scalar 
-        robot2ball_ang: float = np.arctan2( robot2ball_diff[1], robot2ball_diff[0])             # return scalar between [-pi, pi ]
+        robot2ball_ang: float = np.degrees( np.arctan2( robot2ball_diff[1], robot2ball_diff[0]) )             # return scalar between [-pi, pi ]
 
         # Calcula a diferença entre o angulo do robo e o angulo gerado entre o robo e a bola 
-        diff_ang = gk_angle - robot2ball_ang 
-        print( gk_pos, robot2ball_diff)
+        gk_angle = np.degrees(gk_angle) 
+        diff_ang = (gk_angle - robot2ball_ang) % 360
+        print( f"r2b_Dang: {robot2ball_ang:.4f}, gk_Dang:{gk_angle:.4f}, diff_Dang:{diff_ang:.4f}, gk_Rang:{np.cos( np.radians(diff_ang)):.4f}, ball_pos: [{ball_pos[0]:.4f},{ball_pos[1]:.4f}], gk_pos:{gk_pos[1]:.4f},{gk_pos[1]:.4f}]" )
 
         # Calcula a diferença de velocidade baseado no sinal de diff_ang 
-        if diff_ang > 0:
-            # Manipula a roda direita 
-            gk_v_wheel = [ 1, np.cos( diff_ang) ]
-        elif diff_ang < 0:
-            # Manipula a roda esquerda  
-            gk_v_wheel = [ np.cos( diff_ang), 1 ]
+        OFFSET_DIFF_ANGLE = 180
+        if robot2ball_ang > 0:
+            # if abs(diff_ang) > OFFSET_DIFF_ANGLE:
+            #     # Manipula a roda Direita e Esquerda  
+            #     gk_v_wheel = [ 1-np.cos( np.radians(diff_ang+OFFSET_DIFF_ANGLE)), np.cos( np.radians(diff_ang)) ]
+            # else: 
+            # Manipula somente a roda direita 
+            gk_v_wheel = [ 1, np.cos( np.radians(diff_ang)) ]
+        
+        elif robot2ball_ang < 0:
+            # if abs(diff_ang) > OFFSET_DIFF_ANGLE:
+            #     # Manipula a roda esquerda e direita   
+            #     gk_v_wheel = [ np.cos( np.radians(diff_ang)), 1-np.cos( np.radians(diff_ang-OFFSET_DIFF_ANGLE))]
+            # else:
+            # Manipula somente a roda esquerda  
+            gk_v_wheel = [ np.cos( np.radians(diff_ang)), 1 ]
         else: 
             # Anda reto com velocidade máxima 
             gk_v_wheel = [ 1, 1 ]
 
+
         # Ajustar a velocidade máxima conforme necessário, saida de [-1, 1]
-        max_speed = robot2ball_mag*20
+        max_speed = (robot2ball_mag + 0.4 )*20
         # print( gk_v_wheel )
 
         return [ max_speed * gk_v for gk_v in gk_v_wheel ]
@@ -315,7 +345,8 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
         pos = (x(), y())
         places.insert(pos)
 
-        pos_frame.ball = Ball(x=pos[0], y=pos[1])
+        # pos_frame.ball = Ball(x=pos[0], y=pos[1])
+        pos_frame.ball = Ball( x = random.random()*0.6,  y = random.random()*0.6 )
 
         while places.get_nearest(pos)[1] < 0.1:
             pos = (x(-0.5), y())
