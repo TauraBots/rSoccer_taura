@@ -188,7 +188,7 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
         # Pegar a posição da bola  
         ball: Ball = self.frame.ball                # Obter a bola
         ball_pos: list = [ ball.x, ball.y ]         # Obter a posição da bola
-        ball_pos: list = [ ball.x, np.sin( time.time() ) ]         # Obter a posição da bola
+        ball_pos: list = [ ball.x, np.sin( time.time()*np.cos(time.time()) ) ]         # Obter a posição da bola
 
 
         # Cria um target fico para ir até lá
@@ -201,7 +201,7 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
         #         self.next_point()
 
         # Cria um target proporcional ao eixo Y da bola 
-        sin_t = np.sin( time.time() )*0.5
+        sin_t = np.sin( time.time()*0.5 )*np.cos( time.time()*2)*0.5
         ball_pos[0] = 0.65
         if abs(sin_t) > 0.4:
             ball_pos[1] = 0.4 if sin_t > 0 else -0.4
@@ -244,7 +244,7 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
 
 
         # Ajustar a velocidade máxima conforme necessário, saida de [-1, 1]
-        max_speed = (robot2ball_mag + 0.4 )*20
+        max_speed = (robot2ball_mag + 0.4 )*30
         # print( gk_v_wheel )
 
         return [ max_speed * gk_v for gk_v in gk_v_wheel ]
