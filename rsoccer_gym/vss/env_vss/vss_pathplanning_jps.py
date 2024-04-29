@@ -18,20 +18,21 @@ import math
 import gym
 
 
-def distancia( o1, o2 ):
-    return np.sqrt((o1.x - o2.x) ** 2 + (o1.y - o2.y) ** 2)
+# Compute the distance betwewn two points (x,y)
+def distance( point1: list, point2: list ) -> float:
+    return np.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-def close_to_x( x, range = 0.15 ):
-    return np.clip(x + np.random.uniform(-range, range, 1)[0], -0.5, 0.5)
-
-def close_to_y(x, range=0.15):
-    return np.clip(x + np.random.uniform(-range, range, 1)[0], -0.5, 0.5)
-
-def menor_angulo(v1, v2):
-    angle = math.acos(np.dot(v1, v2))
-    if np.cross(v1, v2) > 0:
+def menor_angulo( vector1: list, vector2: list ):
+    angle = math.acos( np.dot( vector1, vector2 ) )
+    if np.cross( vector1, vector2 ) > 0:
         return -angle
     return angle
+
+def close_to_x( x: float, range: float = 0.15 ):
+    return np.clip( x + np.random.uniform( -range, range, 1)[0], -0.5, 0.5 )
+
+def close_to_y( x: float, range: float = 0.15):
+    return np.clip(x + np.random.uniform(-range, range, 1)[0], -0.5, 0.5)
 
 def transform(v1, ang):
     mod = np.sqrt(v1[0] ** 2 + v1[1] ** 2)
@@ -41,132 +42,115 @@ def transform(v1, ang):
 
 
 
-
-class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
-    """This environment controls a singl
-    e robot in a VSS soccer League 3v3 match
-
-        Description:
-        Observation:
-            Type: Box(40)
-            Normalized Bounds to [-1.25, 1.25]
-            Num             Observation normalized
-            0               Ball X
-            1               Ball Y
-            2               Ball Vx
-            3               Ball Vy
-            4 + (7 * i)     id i Blue Robot X
-            5 + (7 * i)     id i Blue Robot Y
-            6 + (7 * i)     id i Blue Robot sin(theta)
-            7 + (7 * i)     id i Blue Robot cos(theta)
-            8 + (7 * i)     id i Blue Robot Vx
-            9  + (7 * i)    id i Blue Robot Vy
-            10 + (7 * i)    id i Blue Robot v_theta
-            25 + (5 * i)    id i Yellow Robot X
-            26 + (5 * i)    id i Yellow Robot Y
-            27 + (5 * i)    id i Yellow Robot Vx
-            28 + (5 * i)    id i Yellow Robot Vy
-            29 + (5 * i)    id i Yellow Robot v_theta
-        Actions:
-            Type: Box(2, )
-            Num     Action
-            0       id 0 Blue Left Wheel Speed  (%)
-            1       id 0 Blue Right Wheel Speed (%)
-        Reward:
-            Sum of Rewards:
-                Goal
-                Ball Potential Gradient
-                Move to Ball
-                Energy Penalty
-        Starting State:
-            Randomized Robots and Ball initial Position
-        Episode Termination:
-            5 minutes match time
-    """
-
-    # go_to_point: list = [ ]
-    point1 = [ random.random()*( -1 if random.randint(0,1) == 1 else 1), random.random()*( -1 if random.randint(0,1) == 1 else 1) ]         
-    point2 = [ random.random()*( -1 if random.randint(0,1) == 1 else 1), random.random()*( -1 if random.randint(0,1) == 1 else 1) ]         
-    point3 = [ random.random()*( -1 if random.randint(0,1) == 1 else 1), random.random()*( -1 if random.randint(0,1) == 1 else 1) ]         
-
-    t1 = 0.0
-
+""" This environment controls a singl e robot in a VSS soccer League 3v3 match
+    Description:
+        >>> .    
+    Observation:
+        Type: Box(40)
+        Normalized Bounds to [-1.25, 1.25]
+        Num             Observation normalized
+        0               Ball X
+        1               Ball Y
+        2               Ball Vx
+        3               Ball Vy
+        4 + (7 * i)     id i Blue Robot X
+        5 + (7 * i)     id i Blue Robot Y
+        6 + (7 * i)     id i Blue Robot sin(theta)
+        7 + (7 * i)     id i Blue Robot cos(theta)
+        8 + (7 * i)     id i Blue Robot Vx
+        9  + (7 * i)    id i Blue Robot Vy
+        10 + (7 * i)    id i Blue Robot v_theta
+        25 + (5 * i)    id i Yellow Robot X
+        26 + (5 * i)    id i Yellow Robot Y
+        27 + (5 * i)    id i Yellow Robot Vx
+        28 + (5 * i)    id i Yellow Robot Vy
+        29 + (5 * i)    id i Yellow Robot v_theta
+    Actions:
+        Type: Box(2, )
+        Num     Action
+        0       id 0 Blue Left Wheel Speed  (%)
+        1       id 0 Blue Right Wheel Speed (%)
+    Reward:
+        >>> Sum of Rewards:
+            Goal
+            Ball Potential Gradient
+            Move to Ball
+            Energy Penalty
+    Starting State:
+        >>> Randomized Robots and Ball initial Position
+    Episode Termination:
+        >>> 5 minutes match time
+"""
+class vss_pathplanning_jps( VSSBaseEnv ):
+    
     def __init__(self):
-        super().__init__(
-            field_type=0, n_robots_blue=1, n_robots_yellow=3, time_step=0.025
+        # Construtor da classe VSSBaseEnv
+        super().__init__( field_type = 0, n_robots_blue = 1, n_robots_yellow = 3, time_step = 0.025 )
+        # Actions 
+        self.action_space = gym.spaces.Box( 
+            low   = -1, 
+            high  =  1, 
+            shape = (2,), 
+            dtype = np.float32 
         )
-
-        self.action_space = gym.spaces.Box( low = -1, high = 1, shape = (2,), dtype = np.float32 )
-        
-        self.observation_space = gym.spaces.Box(
-            low = -self.NORM_BOUNDS, high = self.NORM_BOUNDS, shape = (17,), dtype = np.float32
+        # Observations 
+        self.observation_space = gym.spaces.Box( 
+            low   = -self.NORM_BOUNDS, 
+            high  = self.NORM_BOUNDS, 
+            shape = (17,), 
+            dtype = np.float32
         )
-
-        # O que isso faz ?
-        self.goleiro_teve_bola = False
-
         # Initialize Class Atributes
-        self.previous_ball_potential = None
-
-        self.reward_shaping_total = None
-        self.v_wheel_deadzone: float = 0.05
-        self.actions:dict = None
-
-        self.ou_actions = []
+        self.previous_ball_potential: float = None
+        self.reward_shaping_total: dict     = None
+        self.v_wheel_deadzone: float        = 0.05
+        self.actions: dict                  = None
+        
+        self.ou_actions: list = []
         for _ in range(self.n_robots_blue + self.n_robots_yellow):
             self.ou_actions.append(
-                OrnsteinUhlenbeckAction(self.action_space, dt=self.time_step)
+                OrnsteinUhlenbeckAction(
+                    self.action_space, 
+                    dt = self.time_step
+                )
             )
-        self.difficulty = 0.0  # starts easy
-        self.plotting_data = []
+        self.plotting_data: list    = []
+        self.difficulty: float      = 0.0  
         print("Environment initialized")
 
 
-    def set_diff(self, mean_rewards, max_mean_rewards=450):
-        diff = min(
-            1, max(0.1, mean_rewards) / max_mean_rewards
-        )  # if the mean rewards gets to 450 points, it is maximum difficulty
-
-        if diff > 0.6 and self.difficulty == 0.1:
+    # If the mean rewards gets to 450 points, it is maximum difficulty
+    def set_diff(self, mean_rewards, max_mean_rewards = 450 ):
+        diff = min( 1, max( 0.10, mean_rewards) / max_mean_rewards )
+        if diff > 0.60 and self.difficulty == 0.1:
             self.difficulty = 0.25
-        elif diff > 0.7 and self.difficulty == 0.25:
+        elif diff > 0.70 and self.difficulty == 0.25:
             self.difficulty = 0.55
-        elif diff > 0.8 and self.difficulty == 0.55:
-            self.difficulty = 1
+        elif diff > 0.80 and self.difficulty == 0.55:
+            self.difficulty = 1.00
 
+
+    # Reseta o environment personalizado e chama o super.reset() para resetar o ambiente simulado 
     def reset(self):
-        print(f"Env. difficulty: {self.difficulty}")
-        self.actions = None
-        self.reward_shaping_total = None
+        print( f"Env. difficulty: {self.difficulty}" )
         self.previous_ball_potential = None
+        self.reward_shaping_total = None
+        self.actions = None
 
         for ou in self.ou_actions:
             ou.reset()
-
         self.plotting_data.append([(0, 0)])
-
-        # Falta colocar o goleiro amarelo na reta do gol e controlar ele a partir dessa posição
-        self.t1 = time.time( )
-        self.next_point()
-
-
 
         return super().reset()
     
 
-    def next_point( self ):
-        self.target = [ 0.6*random.random()*( -1 if random.randint(0,1) == 1 else 1), 0.6*random.random()*( -1 if random.randint(0,1) == 1 else 1) ]         
-    
-    def step(self, action):
-        if self.plotting_data[-1][-1] != (
-            self.frame.robots_blue[0].x,
-            self.frame.robots_blue[0].y,
-        ):
-            self.plotting_data[-1].append(
-                (self.frame.robots_blue[0].x, self.frame.robots_blue[0].y)
-            )
+    # realiza um passo no ambiente simulado 
+    def step( self, action ):
+        if self.plotting_data[-1][-1] != ( self.frame.robots_blue[0].x, self.frame.robots_blue[0].y, ):
+            self.plotting_data[-1].append( (self.frame.robots_blue[0].x, self.frame.robots_blue[0].y) )
         observation, reward, done, _ = super().step(action)
         return observation, reward, done, self.reward_shaping_total
+
 
     def _frame_to_observations(self):
         return self.observations_atacante()
@@ -174,51 +158,40 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
     def observations_atacante(self):
         return observations(self)
 
-
     def _get_goalkeeper_vels( self, _debug: bool = False ) -> list:
         # Pegar a posição do Goleiro 
         gk: Robot = self.frame.robots_yellow[0]     # Obter o goleiro
         gk_pos: list = [ gk.x, gk.y ]               # Obter a posição do goleiro 
         gk_angle: float = math.radians(gk.theta)    # Calcular a orientação do goleiro em radianos
         gk_v_wheel: list = [ 0, 0 ]                 # Referencia de velocidade do goleiro
-
         
         # Pegar a posição da bola  
         ball: Ball = self.frame.ball                # Obter a bola
         ball_pos: list = [ ball.x, ball.y ]         # Obter a posição da bola
-        ball_pos: list = [ ball.x, np.sin( time.time()*np.cos(time.time()) ) ]         # Obter a posição da bola
 
-
-        # Cria um target fico para ir até lá
-        # ball_pos: list = [ 0.6, 0.50 ]        
-        
-        # Cria targets que spanw aleatoriamente no campo 
-        # if time.time() - self.t1 > 2:
-        #     ball_pos = self.target  
-        #     if np.sqrt((gk_pos[0] - ball_pos[0]) ** 2 + (gk_pos[1] - ball_pos[1]) ** 2) < 0.05:
-        #         self.next_point()
+        # Lista do target para ser seguido
+        target_pos: list = [ 0.65, ball.y ]
 
         # Cria um target proporcional ao eixo Y da bola 
         sin_t = np.sin( time.time()*0.5 )*np.cos( time.time()*2)*0.5
-        ball_pos[0] = 0.65
+        target_pos[0] = 0.65
         if abs(sin_t) > 0.4:
-            ball_pos[1] = 0.4 if sin_t > 0 else -0.4
+            target_pos[1] = 0.4 if sin_t > 0 else -0.4
         else:
-            ball_pos[1] = sin_t
-
-        # self.frame.ball.y = np.sin( time.time() )
-
+            target_pos[1] = sin_t
 
         # Pegar a distancia entre o goleiro e a bola  
-        robot2ball_diff: list = [ ball_pos[0] - gk_pos[0], ball_pos[1] - gk_pos[1] ]            # return [ dx, dy ]
-        robot2ball_mag: float = np.sqrt((robot2ball_diff[0]) ** 2 + (robot2ball_diff[1]) ** 2)  # return scalar 
-        robot2ball_ang: float = np.degrees( np.arctan2( robot2ball_diff[1], robot2ball_diff[0]) )             # return scalar between [-pi, pi ]
+        robot2ball_diff: list = [ target_pos[0] - gk_pos[0], target_pos[1] - gk_pos[1] ]            # return [ dx, dy ]
+        robot2ball_mag: float = np.sqrt((robot2ball_diff[0]) ** 2 + (robot2ball_diff[1]) ** 2)      # return scalar 
+        robot2ball_ang: float = np.arctan2( robot2ball_diff[1], robot2ball_diff[0])                 # return scalar entre [ -pi e pi ]
 
         # Calcula a diferença entre o angulo do robo e o angulo gerado entre o robo e a bola 
-        gk_angle = np.degrees(gk_angle) 
+        robot2ball_ang = np.degrees( robot2ball_ang) 
+        gk_angle = np.degrees(gk_angle)
+        
         diff_ang = (gk_angle - robot2ball_ang) % 360
         if _debug:
-            print( f"r2b_Dang: {robot2ball_ang:.4f}, gk_Dang:{gk_angle:.4f}, diff_Dang:{diff_ang:.4f}, gk_Rang:{np.cos( np.radians(diff_ang)):.4f}, ball_pos: [{ball_pos[0]:.4f},{ball_pos[1]:.4f}], gk_pos:{gk_pos[1]:.4f},{gk_pos[1]:.4f}]" )
+            print( f"r2b_Dang: {robot2ball_ang:.4f}, gk_Dang:{gk_angle:.4f}, diff_Dang:{diff_ang:.4f}, gk_Rang:{np.cos( np.radians(diff_ang)):.4f}, target_pos: [{target_pos[0]:.4f},{target_pos[1]:.4f}], gk_pos:{gk_pos[1]:.4f},{gk_pos[1]:.4f}]" )
 
         # Calcula a diferença de velocidade baseado no sinal de diff_ang 
         OFFSET_DIFF_ANGLE = 180
