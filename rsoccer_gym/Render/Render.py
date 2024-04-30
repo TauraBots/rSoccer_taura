@@ -1,9 +1,9 @@
-import os
-
-import numpy as np
-from rsoccer_gym.Entities import Frame, Field
 from gym.envs.classic_control import rendering
+from rsoccer_gym.Entities import Frame 
+from rsoccer_gym.Entities import Field
 from typing import Dict, List, Tuple
+import numpy as np
+import os
 
 # COLORS RGB
 BLACK =         (0   /255, 0   /255, 0   /255)
@@ -18,10 +18,9 @@ TAG_RED =       (151 /255, 21  /255, 0   /255)
 TAG_PURPLE =    (102 /255, 51  /255, 153 /255)
 TAG_PINK =      (220 /255, 0   /255, 220 /255)
 
+''' Rendering Class to RoboSim Simulator, based on gym classic control rendering
+'''
 class RCGymRender:
-    '''
-    Rendering Class to RoboSim Simulator, based on gym classic control rendering
-    '''
 
     def __init__(self, n_robots_blue: int,
                  n_robots_yellow: int,
@@ -51,12 +50,21 @@ class RCGymRender:
         None
 
         '''
+        self.blue_robots: List[rendering.Transform] = []
         self.n_robots_blue = n_robots_blue
+
+        self.yellow_robots: List[rendering.Transform] = []
         self.n_robots_yellow = n_robots_yellow
+        
         self.field = field_params
         self.ball: rendering.Transform = None
-        self.blue_robots: List[rendering.Transform] = []
-        self.yellow_robots: List[rendering.Transform] = []
+
+        # Implementação de target Points  
+        self.targets_points: List[ List[ float, float ] ] = []
+
+        self.yellow_robots_trajectory: list = []
+        self.blue_robots_trajectory: list = []
+
 
         # Window dimensions in pixels
         screen_width = width
@@ -91,9 +99,9 @@ class RCGymRender:
         if simulator == "vss":
             # add field_lines
             self._add_field_lines_vss()
-
             # add robots
             self._add_vss_robots()
+
         if simulator == "ssl":
             # add field_lines
             self._add_field_lines_ssl()
@@ -102,6 +110,7 @@ class RCGymRender:
         
         # add ball
         self._add_ball()
+
 
     def __del__(self):
         self.screen.close()
@@ -133,6 +142,7 @@ class RCGymRender:
             self.yellow_robots[i].set_rotation(np.deg2rad(yellow.theta))
 
         return self.screen.render(return_rgb_array=return_rgb_array)
+
 
     def _add_background(self) -> None:
         back_ground = rendering.FilledPolygon([
@@ -520,6 +530,7 @@ class RCGymRender:
 
         # Return the transform class to change robot position
         return robot_transform
+    
 
     def _add_ball(self):
         ball_radius: float = self.field.ball_radius
@@ -538,3 +549,31 @@ class RCGymRender:
         self.screen.add_geom(ball_outline)
         
         self.ball = ball_transform
+    
+    # Adiciona na lista de objetos para serem renderizados 
+    def add_targets_points( self, targets_points  ):
+        for target_x, target_y in targets_points:
+            # Cria a geometria 
+            target: rendering.Geom = rendering.make_circle( self.field.ball_radius*0.5, filled = True )
+            # Cria a matriz de transformações lineares ( Rotação, translação e escala )
+            target_transform: rendering.Transform = rendering.Transform() 
+            # Muda a cor 
+            target.set_color( *TAG_RED )
+            # Adiciona o atributo de transformação na Geometria criada  
+            target.add_attr(target_transform)
+            # Adiciona a geometria na Screen 
+            self.screen.add_geom( target )
+            # Salva o target na lista de Targets_point
+            target = target_transform
+            target_transform.set_translation( target_x, target_y )
+            self.targets_points.append( target_transform )
+            
+    # Renderiza os objetos adicionados 
+    def render_targets_points( self, targets_points ):
+        if len(self.targets_points) == len( targets_points):
+            for ind, point in enumerate(targets_points):
+                self.targets_points[ind].set_translation( *point )
+        else: 
+            self.targets_points = [] 
+            self.add_targets_points( targets_points )
+            self.render_targets_points()

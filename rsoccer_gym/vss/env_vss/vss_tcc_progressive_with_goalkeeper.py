@@ -266,7 +266,6 @@ class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
         )
 
         commands.append(goalkeeper_move)
-        print( commands )
 
         if (
             self.difficulty > 0.5

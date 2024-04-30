@@ -91,3 +91,8 @@ register(id='VSS-goleiro-v0',
          entry_point='rsoccer_gym.vss.env_vss:vss_goleiro',
          max_episode_steps=1000
          )
+
+register(id='VSS-pathplanning-jps-v0',
+         entry_point='rsoccer_gym.vss.env_vss:vss_pathplanning_jps',
+         max_episode_steps=1000
+         )
