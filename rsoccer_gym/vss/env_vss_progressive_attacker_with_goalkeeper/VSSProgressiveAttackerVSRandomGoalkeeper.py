@@ -28,7 +28,7 @@ def close_to_y(x, range=0.15):
     return np.clip(x + np.random.uniform(-range, range, 1)[0], -0.5, 0.5)
 
 
-def menor_angulo(v1, v2):
+def get_smallest_angle(v1, v2):
     angle = math.acos(np.dot(v1, v2))
     if np.cross(v1, v2) > 0:
         return -angle
@@ -39,7 +39,7 @@ def transform(v1, ang):
     mod = np.sqrt(v1[0] ** 2 + v1[1] ** 2)
     v1 = (v1[0] / mod, v1[1] / mod)
 
-    mn = menor_angulo(v1, (math.cos(ang), math.sin(ang)))
+    mn = get_smallest_angle(v1, (math.cos(ang), math.sin(ang)))
 
     return mn, (math.cos(mn) * mod, math.sin(mn) * mod)
 
@@ -180,9 +180,9 @@ class VSSProgressiveAttackerVSRandomGoalkeeper(VSSBaseEnv):
         return observation, reward, done, self.reward_shaping_total
 
     def _frame_to_observations(self):
-        return self.observations_atacante()
+        return self.attacker_observations()
 
-    def observations_atacante(self):
+    def attacker_observations(self):
         return observations(self)
 
     def _get_goalkeeper_vels(self):
@@ -198,12 +198,12 @@ class VSSProgressiveAttackerVSRandomGoalkeeper(VSSBaseEnv):
 
         self.actions[0] = actions[:2]
 
-        # Ações do agente
+        # Attacker actions
         v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions)
 
         commands.append(Robot(yellow=False, id=0, v_wheel0=v_wheel0, v_wheel1=v_wheel1))
 
-        # Ações do goleiro
+        # Goalkeeper actions
         gk_v_wheel_0, gk_v_wheel_1 = self._get_goalkeeper_vels()
 
         goalkeeper_move = Robot(
@@ -309,26 +309,29 @@ class VSSProgressiveAttackerVSRandomGoalkeeper(VSSBaseEnv):
             pos = (x(-0.5), y())
         places.insert(pos)
 
-        # Posição inicial do agente
+        # Trainer agent initial positions
         pos_frame.robots_blue[0] = Robot(x=pos[0], y=pos[1], theta=theta())
 
         while places.get_nearest(pos)[1] < 0.1:
             pos = (x(0.6), close_to_y(0, 0.05))
         places.insert(pos)
 
-        # Posição inicial do goleiro - Centralizado no gol
-        gk_x = 0.7125  # Paralelo a linha do gol
-        gk_y = 0  # Centralizado em Y
+        # Goalkeeper initial positions - Goal centered
+        gk_x = 0.7125  # Parallel to goal line
+        gk_y = 0  # Centered in Y axis
 
+        # If difficulty is lower or equal then EASY
         if self.difficulty <= Difficulty.EASY.value:
-            # Goleiro inicia fora do gol
+            # Goalkeeper starts out of the goal - Just their size off
+            # Random select to be above or below the goal
             is_above = random.choice([True, False])
             gk_y = (self.field.goal_width / 2) + self.field.rbt_radius
             if is_above:
                 gk_y *= -1
 
-        gk_theta = 90  # Apontado 90 graus para cima - Se acelerar +, sobe no eixo Y
-        # print("pos goleiro", gk_x, gk_y, gk_theta)
+        # Goalkeeper starts pointed 90 degrees up
+        # If use positive velocities, it goes up in the Y axis
+        gk_theta = 90
         pos_frame.robots_yellow[0] = Robot(x=gk_x, y=gk_y, theta=gk_theta)
 
         while places.get_nearest(pos)[1] < 0.1:
@@ -346,10 +349,10 @@ class VSSProgressiveAttackerVSRandomGoalkeeper(VSSBaseEnv):
         return pos_frame
 
     def _actions_to_v_wheels(self, actions):
-        # recebe os valores da rede e converte (velocidade linear, velocidade angular)
-        # para velocidades da roda entre -1 e 1
+        # Receives values from the network and converts (linear velocity,
+        # angular velocity) to wheel speeds between -1 and 1
 
-        # espaçamento entre rodas do carrinho, 1 para que o valor maximo seja 1 tbm
+        # spacing between cart wheels (1 so that the maximum value is 1 too)
         L = 1
 
         vleft = (actions[0] - (actions[1] * L) / 2) * 1
