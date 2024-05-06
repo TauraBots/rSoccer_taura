@@ -64,11 +64,9 @@ class Difficulty(Enum):
 
 
 default_metrics = {
-    "mean_rewards": [],
-    "difficulty": [],
-    "robot_position": [[0, 0]],
-    "goals": [],
-    "reward": {"move": [], "energy": [], "ball_gradient": [], "total": []},
+    "difficulty": np.array([]),
+    "goal": np.array([]),
+    "reward": np.array([]),
 }
 
 
@@ -167,11 +165,7 @@ class VSSProgressiveAttackerVSRandomGoalkeeper(VSSBaseEnv):
         ):
             self.difficulty = Difficulty.HARD.value
 
-        self.metrics["mean_rewards"].append(mean_rewards)
-        self.metrics["difficulty"].append(self.difficulty)
-
     def reset(self):
-        print(f"Env. difficulty: {self.difficulty}")
         self.actions = None
         self.reward_shaping_total = None
         self.previous_ball_potential = None
@@ -179,24 +173,9 @@ class VSSProgressiveAttackerVSRandomGoalkeeper(VSSBaseEnv):
         for ou in self.ou_actions:
             ou.reset()
 
-        self.metrics = default_metrics
-
         return super().reset()
 
     def step(self, action):
-        if self.metrics["robot_position"][-1][-1] != (
-            self.frame.robots_blue[0].x,
-            self.frame.robots_blue[0].y,
-        ):
-            self.metrics["robot_position"][-1].append(
-                (self.frame.robots_blue[0].x, self.frame.robots_blue[0].y)
-            )
-
-        self.metrics["mean_rewards"].append(
-            np.mean(self.metrics["reward"]["total"][:-100])
-        )
-        self.metrics["difficulty"].append(self.difficulty)
-
         observation, reward, done, _ = super().step(action)
         return observation, reward, done, self.reward_shaping_total
 
@@ -296,11 +275,9 @@ class VSSProgressiveAttackerVSRandomGoalkeeper(VSSBaseEnv):
                 self.reward_shaping_total["energy"] += energy_penalty
                 self.reward_shaping_total["ball_gradient"] += grad_ball_potential
 
-        self.metrics["reward"]["move"].append(move_reward)
-        self.metrics["reward"]["energy"].append(energy_penalty)
-        self.metrics["reward"]["ball_gradient"].append(grad_ball_potential)
-        self.metrics["reward"]["total"].append(reward)
-        self.metrics["goals"].append(goal)
+        np.append(self.metrics["difficulty"], self.difficulty)
+        np.append(self.metrics["reward"], reward)
+        np.append(self.metrics["goal"], 1 if goal else 0)
 
         return reward, goal
 
