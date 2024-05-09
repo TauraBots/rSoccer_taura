@@ -1,11 +1,3 @@
-import pickle
-import math
-import random
-from rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
-from typing import Dict
-
-import gym
-import numpy as np
 from rsoccer_gym.Entities import Frame, Robot, Ball
 from rsoccer_gym.vss.vss_gym_base import VSSBaseEnv
 from rsoccer_gym.Utils import KDTree
@@ -16,6 +8,15 @@ from rsoccer_gym.vss.env_vss.shared_tcc import (
     w_move_tcc,
     goal_reward,
 )
+
+from rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
+from typing import Dict
+
+import numpy as np
+import pickle
+import random
+import math
+import gym
 
 
 def distancia(o1, o2):
@@ -32,10 +33,8 @@ def close_to_y(x, range=0.15):
 
 def menor_angulo(v1, v2):
     angle = math.acos(np.dot(v1, v2))
-
     if np.cross(v1, v2) > 0:
         return -angle
-
     return angle
 
 
@@ -48,7 +47,7 @@ def transform(v1, ang):
     return mn, (math.cos(mn) * mod, math.sin(mn) * mod)
 
 
-class vss_tcc_progressivo(VSSBaseEnv):
+class vss_tcc_progressive_with_goalkeeper(VSSBaseEnv):
     """This environment controls a singl
     e robot in a VSS soccer League 3v3 match
 
@@ -144,6 +143,9 @@ class vss_tcc_progressivo(VSSBaseEnv):
 
         self.plotting_data.append([(0, 0)])
 
+        # Falta colocar o goleiro amarelo na reta do gol e controlar ele a partir dessa posição
+        # self.
+
         return super().reset()
 
     def step(self, action):
@@ -163,20 +165,66 @@ class vss_tcc_progressivo(VSSBaseEnv):
     def observations_atacante(self):
         return observations(self)
 
+    def _get_goalkeeper_vels(self):
+        # Obter a posição atual do goleiro
+        gk_pos = self.frame.robots_yellow[0]
+
+        # Obter a posição da bola
+        ball_pos = self.frame.ball
+
+        # Calcular a diferença entre a posição Y do goleiro e a posição Y da bola
+        diff_y = ball_pos.y - gk_pos.y
+
+        # Calcular a orientação do goleiro em radianos
+        gk_orientation = math.radians(gk_pos.orientation)
+
+        # Definir a velocidade máxima das rodas
+        max_speed = 0.7  # Ajuste conforme necessário
+        # Se o goleiro estiver apontando para a direção da bola, mova-se diretamente para a bola
+        if math.cos(gk_orientation) * diff_y > 0:
+            gk_v_wheel_0 = max_speed
+            gk_v_wheel_1 = max_speed
+        # Se o goleiro estiver apontando na direção oposta à bola, gire em direção à bola primeiro
+        else:
+            # Calcular a diferença de orientação necessária para apontar para a bola
+            diff_orientation = (
+                math.atan2(ball_pos.y - gk_pos.y, ball_pos.x - gk_pos.x)
+                - gk_orientation
+            )
+            # Normalizar a diferença de orientação para o intervalo [-pi, pi]
+            diff_orientation = math.atan2(
+                math.sin(diff_orientation), math.cos(diff_orientation)
+            )
+            # Definir as velocidades das rodas para girar em direção à bola
+            gk_v_wheel_0 = -max_speed * math.sign(diff_orientation)
+            gk_v_wheel_1 = max_speed * math.sign(diff_orientation)
+
+        # return gk_v_wheel_0, gk_v_wheel_1
+        return 1, 1
+
     def _get_commands(self, actions):
         commands = []
         self.actions = {}
 
         self.actions[0] = actions[:2]
-        v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions)
+        gk_v_wheel_0, gk_v_wheel_1 = self._get_goalkeeper_vels()
 
-        commands.append(Robot(yellow=False, id=0, v_wheel0=v_wheel0, v_wheel1=v_wheel1))
+        goalkeeper_move = Robot(
+            yellow=True,
+            id=0,
+            v_wheel0=gk_v_wheel_0,
+            v_wheel1=gk_v_wheel_1,
+        )
+
+        commands.append(goalkeeper_move)
 
         if (
             self.difficulty > 0.5
         ):  # if agent is 50% good, start slowly making other robots move in a random way
             movement = (self.difficulty - 0.2) / 0.8
-            for i in range(0, self.n_robots_yellow):
+
+            # Skip robot with id 0 which is the goalkeeper
+            for i in range(1, self.n_robots_yellow):
                 actions = self.ou_actions[self.n_robots_blue + i].sample()
                 v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions)
                 commands.append(

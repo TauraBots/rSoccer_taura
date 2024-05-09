@@ -1,11 +1,4 @@
-import pickle
-import math
-import random
-from rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
-from typing import Dict
-
-import gym
-import numpy as np
+from enum import Enum
 from rsoccer_gym.Entities import Frame, Robot, Ball
 from rsoccer_gym.vss.vss_gym_base import VSSBaseEnv
 from rsoccer_gym.Utils import KDTree
@@ -15,7 +8,17 @@ from rsoccer_gym.vss.env_vss.shared_tcc import (
     w_energy_tcc,
     w_move_tcc,
     goal_reward,
+    own_goal_reward,
 )
+
+from rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
+from typing import Dict
+
+import numpy as np
+import pickle
+import random
+import math
+import gym
 
 
 def distancia(o1, o2):
@@ -32,10 +35,8 @@ def close_to_y(x, range=0.15):
 
 def menor_angulo(v1, v2):
     angle = math.acos(np.dot(v1, v2))
-
     if np.cross(v1, v2) > 0:
         return -angle
-
     return angle
 
 
@@ -48,7 +49,26 @@ def transform(v1, ang):
     return mn, (math.cos(mn) * mod, math.sin(mn) * mod)
 
 
-class vss_tcc_progressivo(VSSBaseEnv):
+# Enum of difficulties
+class Difficulty(Enum):
+    INITIAL = 0.1
+    EASY = 0.25
+    MEDIUM = 0.55
+    HARD = 1
+
+    @staticmethod
+    def getDifficulty(value):
+        if value < Difficulty.EASY.value:
+            return Difficulty.INITIAL
+        elif value < Difficulty.MEDIUM.value:
+            return Difficulty.EASY
+        elif value < Difficulty.HARD.value:
+            return Difficulty.MEDIUM
+        else:
+            return Difficulty.HARD
+
+
+class vss_progressive_simple_goalkeeper(VSSBaseEnv):
     """This environment controls a singl
     e robot in a VSS soccer League 3v3 match
 
@@ -117,21 +137,39 @@ class vss_tcc_progressivo(VSSBaseEnv):
 
         self.difficulty = 0.0  # starts easy
 
-        self.plotting_data = []
+        self.metrics = {
+            "mean_rewards": [],
+            "difficulty": [],
+            "robot_position": [],
+            "reward": {"move": [], "energy": [], "ball_gradient": [], "total": []},
+        }
 
         print("Environment initialized")
 
     def set_diff(self, mean_rewards, max_mean_rewards=450):
+
         diff = min(
             1, max(0.1, mean_rewards) / max_mean_rewards
         )  # if the mean rewards gets to 450 points, it is maximum difficulty
 
-        if diff > 0.6 and self.difficulty == 0.1:
-            self.difficulty = 0.25
-        elif diff > 0.7 and self.difficulty == 0.25:
-            self.difficulty = 0.55
-        elif diff > 0.8 and self.difficulty == 0.55:
-            self.difficulty = 1
+        print(
+            f"Mean rewards: {mean_rewards} | Max mean rewards: {max_mean_rewards} | Diff: {diff}"
+        )
+
+        if diff > 0.6 and self.difficulty <= Difficulty.INITIAL.value:
+            self.difficulty = Difficulty.EASY.value
+        elif (
+            diff > 0.7 and Difficulty.getDifficulty(self.difficulty) == Difficulty.EASY
+        ):
+            self.difficulty = Difficulty.MEDIUM.value
+        elif (
+            diff > 0.8
+            and Difficulty.getDifficulty(self.difficulty) == Difficulty.MEDIUM
+        ):
+            self.difficulty = Difficulty.HARD.value
+
+        self.metrics["mean_rewards"].append(mean_rewards)
+        self.metrics["difficulty"].append(self.difficulty)
 
     def reset(self):
         print(f"Env. difficulty: {self.difficulty}")
@@ -142,18 +180,27 @@ class vss_tcc_progressivo(VSSBaseEnv):
         for ou in self.ou_actions:
             ou.reset()
 
-        self.plotting_data.append([(0, 0)])
+        self.metrics = {
+            "mean_rewards": [],
+            "difficulty": [],
+            "robot_position": [[0, 0]],
+            "reward": {"move": [], "energy": [], "ball_gradient": [], "total": []},
+        }
 
         return super().reset()
 
     def step(self, action):
-        if self.plotting_data[-1][-1] != (
+        if self.metrics["robot_position"][-1][-1] != (
             self.frame.robots_blue[0].x,
             self.frame.robots_blue[0].y,
         ):
-            self.plotting_data[-1].append(
+            self.metrics["robot_position"][-1].append(
                 (self.frame.robots_blue[0].x, self.frame.robots_blue[0].y)
             )
+
+        self.metrics["mean_rewards"].append(np.mean(self.metrics["reward"]["total"]))
+        self.metrics["difficulty"].append(self.difficulty)
+
         observation, reward, done, _ = super().step(action)
         return observation, reward, done, self.reward_shaping_total
 
@@ -163,20 +210,57 @@ class vss_tcc_progressivo(VSSBaseEnv):
     def observations_atacante(self):
         return observations(self)
 
+    def _get_goalkeeper_vels(self):
+        # Obter a posição atual do goleiro
+        gk_pos = self.frame.robots_yellow[0]
+
+        # Obter a posição da bola
+        ball_pos = self.frame.ball.y
+
+        max_gk_pos = self.field.goal_width / 2
+
+        parsed_ball_pos = np.clip(ball_pos, -max_gk_pos, max_gk_pos)
+
+        # Calcular a diferença entre a posição Y do goleiro e a posição Y da bola
+        diff_y = parsed_ball_pos - gk_pos.y
+
+        if diff_y > 0:
+            return 1, 1
+        elif diff_y < 0:
+            return -1, -1
+        else:
+            return 0, 0
+
     def _get_commands(self, actions):
         commands = []
         self.actions = {}
 
         self.actions[0] = actions[:2]
+
+        # Ações do agente
         v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions)
 
         commands.append(Robot(yellow=False, id=0, v_wheel0=v_wheel0, v_wheel1=v_wheel1))
+
+        # Ações do goleiro
+        gk_v_wheel_0, gk_v_wheel_1 = self._get_goalkeeper_vels()
+
+        goalkeeper_move = Robot(
+            yellow=True,
+            id=0,
+            v_wheel0=gk_v_wheel_0 * self.difficulty,
+            v_wheel1=gk_v_wheel_1 * self.difficulty,
+        )
+
+        commands.append(goalkeeper_move)
 
         if (
             self.difficulty > 0.5
         ):  # if agent is 50% good, start slowly making other robots move in a random way
             movement = (self.difficulty - 0.2) / 0.8
-            for i in range(0, self.n_robots_yellow):
+
+            # Skip robot with id 0 which is the goalkeeper
+            for i in range(1, self.n_robots_yellow):
                 actions = self.ou_actions[self.n_robots_blue + i].sample()
                 v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions)
                 commands.append(
@@ -208,7 +292,7 @@ class vss_tcc_progressivo(VSSBaseEnv):
             reward = goal_reward
             goal = True
         elif self.frame.ball.x < -(self.field.length / 2):
-            reward = -100
+            reward = own_goal_reward
             goal = True
         else:
 
@@ -222,6 +306,11 @@ class vss_tcc_progressivo(VSSBaseEnv):
 
                 reward = grad_ball_potential + move_reward + energy_penalty
 
+                self.metrics["reward"]["move"].append(move_reward)
+                self.metrics["reward"]["energy"].append(energy_penalty)
+                self.metrics["reward"]["ball_gradient"].append(grad_ball_potential)
+                self.metrics["reward"]["total"].append(reward)
+
                 self.reward_shaping_total["move"] += move_reward
                 self.reward_shaping_total["energy"] += energy_penalty
                 self.reward_shaping_total["ball_gradient"] += grad_ball_potential
@@ -231,11 +320,14 @@ class vss_tcc_progressivo(VSSBaseEnv):
     def _get_initial_positions_frame(self):
         """Returns the position of each robot and ball for the initial frame"""
 
+        range_from_point = self.difficulty
+        # range_from_point = 1
+
         def x(x: float = 0):
-            return close_to_x(x, self.difficulty)
+            return close_to_x(x, range_from_point)
 
         def y(y: float = 0):
-            return close_to_y(y, self.difficulty)
+            return close_to_y(y, range_from_point)
 
         def theta():
             return random.uniform(0, 360)
@@ -253,15 +345,27 @@ class vss_tcc_progressivo(VSSBaseEnv):
             pos = (x(-0.5), y())
         places.insert(pos)
 
-        # posicao do agente
+        # Posição inicial do agente
         pos_frame.robots_blue[0] = Robot(x=pos[0], y=pos[1], theta=theta())
 
         while places.get_nearest(pos)[1] < 0.1:
             pos = (x(0.6), close_to_y(0, 0.05))
         places.insert(pos)
 
-        # posicao inicial do goleiro
-        pos_frame.robots_yellow[0] = Robot(x=pos[0], y=pos[1], theta=theta())
+        # Posição inicial do goleiro - Centralizado no gol
+        gk_x = 0.7125  # Paralelo a linha do gol
+        gk_y = 0  # Centralizado em Y
+
+        if self.difficulty <= Difficulty.EASY.value:
+            # Goleiro inicia fora do gol
+            is_above = random.choice([True, False])
+            gk_y = (self.field.goal_width / 2) + self.field.rbt_radius
+            if is_above:
+                gk_y *= -1
+
+        gk_theta = 90  # Apontado 90 graus para cima - Se acelerar +, sobe no eixo Y
+        # print("pos goleiro", gk_x, gk_y, gk_theta)
+        pos_frame.robots_yellow[0] = Robot(x=gk_x, y=gk_y, theta=gk_theta)
 
         while places.get_nearest(pos)[1] < 0.1:
             pos = (x(), y(-0.4))
